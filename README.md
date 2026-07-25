@@ -2,13 +2,13 @@
 
 A small language model I've been tinkering with, sized so it actually trains on
 one consumer GPU (a 5070, 12GB) instead of a rented cluster. It's a trimmed-down
-fork of my earlier FERN-2 — the goal here isn't to beat anything at scale, just
-to see how far a few efficiency ideas get you on a single card.
+fork of my earlier FERN-2. The goal here isn't to beat anything at scale, just to
+see how far a few efficiency ideas get you on a single card.
 
-## The gist
+## How it works
 
 FERN is a sparse model. There's a big pool of small "expert" sub-networks grouped
-by rough role — language, math, code, and so on — but only the top two fire for
+by rough role (language, math, code, and so on), but only the top two fire for
 any given token, so the compute per token stays tiny even as the total parameter
 count grows.
 
@@ -25,7 +25,7 @@ The "eco" part is just the stuff that keeps it on a 12GB card:
 - reversible blocks, so activation memory doesn't grow with reasoning depth,
 - GaLore, which keeps the optimizer state in a low-rank subspace (roughly half
   the memory it'd otherwise need),
-- a deliberately small default preset — ~8M params total, ~2.5M active per token.
+- a deliberately small default preset of about 8M params total, ~2.5M active per token.
 
 There's a bit more detail in [`ECO_NOTES.md`](ECO_NOTES.md).
 
@@ -48,9 +48,8 @@ python train.py --preset eco --reversible --galore --amp \
 ## Status
 
 Early and experimental. It trains, the loss goes down, and the pieces fit
-together — but I haven't pushed it at anything serious yet, so expect rough
-edges.
+together, but I haven't pushed it at anything serious yet, so expect rough edges.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT, see [LICENSE](LICENSE).

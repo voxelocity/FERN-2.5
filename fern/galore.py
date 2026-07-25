@@ -121,16 +121,25 @@ class GaLoreAdamW(Optimizer):
 
 
 def build_galore_param_groups(model, rank=128, update_gap=200, scale=0.25):
-    """Split the model's params: large 2D matrices -> GaLore group, everything
-    else (norms, biases, embeddings, 1D) -> plain AdamW group. Embeddings/lm_head
-    are 2D but tied and vocab-shaped; we still project them since they are among
-    the largest tensors and benefit most, but skip anything with a tiny min-dim
-    where low-rank buys nothing."""
+    """Split the model's params: large 2D weight matrices -> GaLore group,
+    everything else -> plain AdamW group.
+
+    CRITICAL: embeddings and the (tied) lm_head are EXCLUDED. GaLore projects the
+    gradient into a low-rank subspace, which is right for dense weight matrices
+    but wrong for embeddings: each token's row is updated independently and
+    sparsely, so a rank-r projection of the embedding gradient throws away the
+    per-token signal. With a large BPE vocab that stalls training outright (the
+    model can't learn to distinguish tokens). Norms/biases/1D and any matrix
+    whose min-dim <= rank also stay on plain AdamW, where low-rank buys nothing.
+    Matches the GaLore paper, which only projects the transformer's linear/attn
+    weights."""
+    EXCLUDE = ("emb", "lm_head")     # embeddings + tied output head -> plain AdamW
     galore, plain = [], []
     for name, p in model.named_parameters():
         if not p.requires_grad:
             continue
-        if p.ndim == 2 and min(p.shape) > rank:
+        is_embedding = any(tag in name for tag in EXCLUDE)
+        if p.ndim == 2 and min(p.shape) > rank and not is_embedding:
             galore.append(p)
         else:
             plain.append(p)

@@ -1,0 +1,12 @@
+# checkpoints, tokenized corpora, trained tokenizers — regenerated on the box
+*.pt
+*.bin
+tok*.json
+eval_*.json
+
+# python
+__pycache__/
+*.pyc
+/venv/
+/.venv/
+*.log

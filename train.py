@@ -63,6 +63,8 @@ def build_config(args) -> FERNConfig:
         overrides["gen_mode"] = args.gen_mode
     if args.diff_block is not None:
         overrides["diff_block_size"] = args.diff_block
+    if args.attn_window is not None:
+        overrides["attn_local_window"] = args.attn_window
     if args.tokenizer:
         overrides.update(tokenizer_kind="bpe", tokenizer_path=args.tokenizer,
                          vocab_size=_bpe_vocab_size(args.tokenizer))
@@ -103,6 +105,11 @@ def main():
     ap.add_argument("--warmup", type=int, default=300, help="LR warmup steps")
     ap.add_argument("--offload", action="store_true")
     ap.add_argument("--amp", action="store_true", help="bf16 mixed precision")
+    ap.add_argument("--attn_window", type=int, default=None,
+                    help="local attention window = the REAL context bound "
+                         "(default: preset's; eco=256). Attention is a dense "
+                         "masked matmul, so raising --block past this buys "
+                         "almost no context and costs O(T^2).")
     ap.add_argument("--reversible", action="store_true",
                     help="recompute reasoning-block activations on backward "
                          "(memory-free depth); on by default under --preset eco")

@@ -242,10 +242,18 @@ class FERNConfig:
             #       d=256, 24 experts -> ~8M total (byte) / ~15M (16k BPE),
             #       ~2.5M active/token (top-2 fire). No offload needed; pair with
             #       --reversible --galore --amp.
+            # attn_local_window is the REAL context bound: the block-causal mask
+            # gives each token its own block + `window` tokens back + 8 global
+            # anchors, and attention is a dense masked matmul, so a large
+            # --block with a 64-wide window computes a huge score matrix and
+            # discards >90% of it. 256 makes the window the thing you actually
+            # pay for; pair it with --block 512 (measured: ~4x cheaper attention
+            # than --block 1024 while ~3.5x more context per token).
             "eco":   dict(d_model=256, n_heads=4, experts_per_region=4,
                           expert_hidden_mult=2, max_seq_len=1024,
                           max_fractal_depth=4, reversible=True,
-                          gen_mode="diffusion", diff_block_size=16),
+                          gen_mode="diffusion", diff_block_size=16,
+                          attn_local_window=256),
             "small": dict(d_model=512, n_heads=8, experts_per_region=8,
                           expert_hidden_mult=4, max_seq_len=2048),
             "base":  dict(d_model=768, n_heads=12, experts_per_region=32,

@@ -154,11 +154,16 @@ def generate_diffusion(model, prompt_ids: torch.Tensor, max_new_tokens=64,
     device = prompt_ids.device
 
     ids = prompt_ids
-    # pad the prompt up to a block boundary so generated blocks stay aligned;
-    # the pad tokens are clean context and are stripped at decode time.
+    # Pad the prompt up to a block boundary so generated blocks stay aligned.
+    # Pad on the LEFT: right-padding would insert <pad> BETWEEN the prompt and
+    # the block being denoised, and training never shows pads mid-sequence, so
+    # the model sees an off-distribution context right where it matters most
+    # (measured: right-pad collapses short-prompt generation to pure newlines).
+    # Left-padding keeps the real prompt flush against the generated block.
     pad_n = (-ids.shape[1]) % L
+    n_pad_left = pad_n
     if pad_n:
-        ids = F.pad(ids, (0, pad_n), value=cfg.pad_id)
+        ids = F.pad(ids, (pad_n, 0), value=cfg.pad_id)
 
     n_blocks = math.ceil(max_new_tokens / L)
     for _ in range(n_blocks):
@@ -166,4 +171,6 @@ def generate_diffusion(model, prompt_ids: torch.Tensor, max_new_tokens=64,
         ids = torch.cat([ids, block], dim=1)
         if any(int(tok) in stop for tok in block[0].tolist()):
             break
+    if n_pad_left:
+        ids = ids[:, n_pad_left:]      # drop the alignment pads we prepended
     return ids

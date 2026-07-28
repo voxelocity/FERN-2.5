@@ -56,16 +56,25 @@ def main():
     print(f"mode       : {cfg.gen_mode} | tokenizer {cfg.tokenizer_kind} "
           f"(vocab {cfg.vocab_size}) | attn window {cfg.attn_local_window}\n")
 
+    def clean(s):
+        return s.encode("ascii", "replace").decode()
+
     prompts = [args.prompt] if args.prompt else DEFAULT_PROMPTS
     for p in prompts:
-        ids = torch.tensor([tok.encode(p, add_bos=True)], device=args.device)
+        enc = tok.encode(p, add_bos=True)
+        ids = torch.tensor([enc], device=args.device)
         gen = model.generate(ids, max_new_tokens=args.max_new_tokens,
                              temperature=args.temperature, top_k=args.top_k,
                              steps=args.steps)
-        txt = tok.decode(gen[0].tolist()).encode("ascii", "replace").decode()
-        print("-" * 64)
-        print(txt)
-    print("-" * 64)
+        # generate() returns prompt + continuation, so split at the prompt length
+        completion = tok.decode(gen[0, len(enc):].tolist())
+        print("=" * 64)
+        print("PROMPT (yours):")
+        print(clean(p))
+        print("\nCOMPLETION (model):")
+        print(clean(completion) if completion.strip()
+              else f"  <whitespace only: {len(completion)} chars>")
+        print()
 
     if args.infill_test:
         if not args.bin:

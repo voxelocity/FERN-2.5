@@ -203,11 +203,46 @@ def main():
     start_step = 1
     if args.resume:
         ck = torch.load(args.resume, map_location=args.device, weights_only=False)
-        model.load_state_dict(ck["model"])
-        if "opt" in ck:
+        sd = ck["model"]
+        cur = model.state_dict()
+        # Adapt an older checkpoint to the current architecture: keep every
+        # tensor whose shape still matches, truncate depth_emb if the reasoning
+        # depth shrank (the leading rows are the ones actually used), and drop
+        # tensors for subsystems that no longer exist. Dropping only ever
+        # removes modules measured to contribute exactly zero, so the learned
+        # function is preserved -- but report it loudly rather than silently.
+        keep, dropped, resized, missing = {}, [], [], []
+        for k, v in sd.items():
+            if k not in cur:
+                dropped.append(k)
+            elif cur[k].shape == v.shape:
+                keep[k] = v
+            elif (v.dim() == cur[k].dim()
+                  and all(c <= o for c, o in zip(cur[k].shape, v.shape))):
+                sl = tuple(slice(0, c) for c in cur[k].shape)
+                keep[k] = v[sl].clone()
+                resized.append(f"{k} {tuple(v.shape)}->{tuple(cur[k].shape)}")
+            else:
+                dropped.append(f"{k} {tuple(v.shape)} vs {tuple(cur[k].shape)}")
+        missing = [k for k in cur if k not in keep]
+        model.load_state_dict(keep, strict=False)
+        exact = not dropped and not resized and not missing
+        if "opt" in ck and exact:
             opt.load_state_dict(ck["opt"])
         start_step = ck.get("step", 0) + 1
         print(f"resumed from {args.resume} at step {start_step}")
+        print(f"  loaded {len(keep)} tensors"
+              + (f" | resized {len(resized)}" if resized else "")
+              + (f" | dropped {len(dropped)}" if dropped else "")
+              + (f" | freshly initialised {len(missing)}" if missing else ""))
+        for r in resized:
+            print(f"    resized: {r}")
+        for d in dropped[:8]:
+            print(f"    dropped: {d}")
+        if not exact:
+            print("  [resume] architecture changed -> optimizer state NOT "
+                  "restored (Adam moments would not match). Expect a brief "
+                  "loss bump while the moments rebuild.")
 
     import os, glob, re
     stem, ext = os.path.splitext(args.out)

@@ -140,6 +140,11 @@ class FERNConfig:
     ct_dt: float = 0.5             # Euler step size for the latent ODE
 
     # ---- (12) Hierarchical memory ---------------------------------------
+    # Measured inert during pretraining: nothing writes to it (write_memory is
+    # False in train.py and in generate()), so `memory.read()` returns exact
+    # zeros every forward while still costing parameters, optimizer state, and
+    # compute. Off for `eco`; turn on only if you actually write to it.
+    use_hier_memory: bool = True
     mem_tiers: List[str] = field(default_factory=lambda: [
         "working", "short", "long", "archive",
     ])
@@ -262,7 +267,15 @@ class FERNConfig:
                           max_fractal_depth=4, reversible=True,
                           gen_mode="diffusion", diff_block_size=16,
                           attn_local_window=256,
-                          moe_capacity_factor=4.0, load_balance_weight=0.05),
+                          moe_capacity_factor=4.0, load_balance_weight=0.05,
+                          # Measured dead during block-diffusion pretraining
+                          # (zero gradient, exact-zero output) — they cost
+                          # params, optimizer state and per-forward compute
+                          # while contributing nothing. TTM is *already*
+                          # skipped under diffusion; knowledge/hier-memory
+                          # return zeros because nothing populates them.
+                          use_test_time_memory=False, use_knowledge=False,
+                          use_hier_memory=False),
             "small": dict(d_model=512, n_heads=8, experts_per_region=8,
                           expert_hidden_mult=4, max_seq_len=2048),
             "base":  dict(d_model=768, n_heads=12, experts_per_region=32,

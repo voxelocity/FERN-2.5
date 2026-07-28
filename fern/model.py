@@ -39,9 +39,15 @@ class FERN(nn.Module):
 
         self.event_gate = EventGate(config)
         self.compressor = StateCompressor(config)
-        self.memory = HierarchicalMemory(config)
-        self.store = knowledge_store or KnowledgeStore(config.knowledge_dim)
-        self.retriever = KnowledgeRetriever(config, self.store)
+        # Both are optional: with nothing written to the memory and nothing
+        # loaded into the knowledge store they return exact zeros, so they are
+        # pure overhead during pretraining (see config.use_hier_memory).
+        self.memory = HierarchicalMemory(config) if config.use_hier_memory else None
+        if config.use_knowledge:
+            self.store = knowledge_store or KnowledgeStore(config.knowledge_dim)
+            self.retriever = KnowledgeRetriever(config, self.store)
+        else:
+            self.store, self.retriever = None, None
         self.core = FractalCore(config)
 
         # NEW radical subsystems
@@ -80,8 +86,12 @@ class FERN(nn.Module):
         pos = torch.arange(T, device=device).clamp_max(self.config.max_seq_len - 1)
         x = self.token_emb(input_ids) + self.pos_emb(pos)[None]
 
-        # (12)(2) condition on memory + external knowledge (no-ops when empty)
-        x = x + self.memory.read(x) + self.retriever(x)
+        # (12)(2) condition on memory + external knowledge (skipped entirely
+        # when disabled — they were exact no-ops that still cost compute)
+        if self.memory is not None:
+            x = x + self.memory.read(x)
+        if self.retriever is not None:
+            x = x + self.retriever(x)
 
         # (7) event-driven salience + global anchors
         salience, global_idx = self.event_gate(x)
@@ -116,7 +126,8 @@ class FERN(nn.Module):
         # (8) update compressed state; (12) optionally persist it
         latent_new = self.compressor(latent, h)
         if write_memory:
-            self.memory.write(latent_new)
+            if self.memory is not None:
+                self.memory.write(latent_new)
 
         h = self.final_norm(h)
         logits = self.lm_head(h)

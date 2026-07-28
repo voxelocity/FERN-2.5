@@ -1,9 +1,7 @@
 # FERN-2.5 (eco)
 
-A small language model I've been tinkering with, sized so it actually trains on
-one consumer GPU (a 5070, 12GB) instead of a rented cluster. It's a trimmed-down
-fork of my earlier FERN-2. The goal here isn't to beat anything at scale, just to
-see how far a few efficiency ideas get you on a single card.
+A small language model I've been building, sized so it actually trains on
+one consumer GPU (a 5070, 12GB) instead of a rented cluster.
 
 ## How it works
 

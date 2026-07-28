@@ -50,8 +50,6 @@ def build_config(args) -> FERNConfig:
         reasoning_mode=args.reasoning_mode,
         offload_experts=args.offload,
         max_seq_len=max(256, args.block),
-        use_test_time_memory=not args.no_ttm,
-        use_neuromodulator=not args.no_neuromod,
     )
     # only force these when explicitly passed, so a preset that sets them (eco =
     # reversible + block diffusion) isn't silently overridden back to the CLI
@@ -66,6 +64,12 @@ def build_config(args) -> FERNConfig:
         overrides["attn_local_window"] = args.attn_window
     if args.depth is not None:
         overrides["max_fractal_depth"] = args.depth
+    # these are store_true flags: only force the subsystem OFF when the flag is
+    # given, otherwise the preset decides (eco disables both TTM and knowledge)
+    if args.no_ttm:
+        overrides["use_test_time_memory"] = False
+    if args.no_neuromod:
+        overrides["use_neuromodulator"] = False
     if args.capacity_factor is not None:
         overrides["moe_capacity_factor"] = args.capacity_factor
     if args.load_balance is not None:

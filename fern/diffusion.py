@@ -126,9 +126,19 @@ def _denoise_block(model, ids: torch.Tensor, L: int, steps: int,
         # already-revealed positions stay revealed (give them +inf confidence)
         conf_eff = torch.where(is_masked, conf, torch.full_like(conf, float("inf")))
 
-        # cosine schedule: tokens still masked AFTER this step
+        # Cosine schedule: how many tokens are still masked AFTER this step.
+        # Every position in a masked block is predicted from the SAME context,
+        # so their marginals are near-identical and committing several at once
+        # yields the same token repeatedly -- the classic parallel-decoding
+        # repetition. Two guards keep the reveal gradual *and* productive:
+        #   * commit at most `max_commit` new tokens per step (default 1),
+        #   * but always commit at least one, so a step is never wasted
+        #     (the raw cosine schedule stalls at 0 reveals when steps > L).
         n_mask_next = int(math.floor(L * math.cos(math.pi / 2 * (s + 1) / steps)))
         n_reveal = L - n_mask_next                                      # total revealed
+        n_prev = int((~is_masked).sum(-1).max())        # already committed
+        max_commit = max(1, math.ceil(L / max(steps, 1)))
+        n_reveal = min(max(n_reveal, n_prev + 1), n_prev + max_commit, L)
         if n_reveal >= L:
             keep_revealed = torch.ones_like(is_masked)
         else:

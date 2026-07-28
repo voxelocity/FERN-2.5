@@ -88,7 +88,12 @@ class FERNConfig:
     #               local context -> native infilling/editing). See fern/diffusion.py.
     gen_mode: str = "ar"
     diff_block_size: int = 16      # tokens per diffusion block
-    diff_steps: int = 8            # denoising steps per block at inference
+    # Denoising steps per block at inference. Measured: at 8 steps the sampler
+    # commits up to 3 tokens at once from near-identical marginals, which is
+    # what makes generation repeat itself. Setting this to diff_block_size
+    # commits one token per step and markedly improves coherence; it costs one
+    # forward per token, so lower it if you want speed over quality.
+    diff_steps: int = 16           # = diff_block_size -> one token per step
     # Clipped masking-rate schedule (BD3-LM): sampling the mask prob from a
     # CLIPPED range instead of full (0,1) sharply lowers gradient variance, the
     # key trick that makes from-scratch block diffusion trainable.

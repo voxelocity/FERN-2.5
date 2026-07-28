@@ -65,6 +65,10 @@ def build_config(args) -> FERNConfig:
         overrides["diff_block_size"] = args.diff_block
     if args.attn_window is not None:
         overrides["attn_local_window"] = args.attn_window
+    if args.capacity_factor is not None:
+        overrides["moe_capacity_factor"] = args.capacity_factor
+    if args.load_balance is not None:
+        overrides["load_balance_weight"] = args.load_balance
     if args.tokenizer:
         overrides.update(tokenizer_kind="bpe", tokenizer_path=args.tokenizer,
                          vocab_size=_bpe_vocab_size(args.tokenizer))
@@ -105,6 +109,13 @@ def main():
     ap.add_argument("--warmup", type=int, default=300, help="LR warmup steps")
     ap.add_argument("--offload", action="store_true")
     ap.add_argument("--amp", action="store_true", help="bf16 mixed precision")
+    ap.add_argument("--capacity_factor", type=float, default=None,
+                    help="MoE expert capacity (default: preset's; eco=4.0). "
+                         "Too low silently DROPS routed tokens; buffers scale "
+                         "with batch*block, so lower it if VRAM is tight.")
+    ap.add_argument("--load_balance", type=float, default=None,
+                    help="load-balancing aux weight (default: preset's; "
+                         "eco=0.05). Raise if experts stay imbalanced.")
     ap.add_argument("--attn_window", type=int, default=None,
                     help="local attention window = the REAL context bound "
                          "(default: preset's; eco=256). Attention is a dense "

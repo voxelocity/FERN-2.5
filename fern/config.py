@@ -249,11 +249,20 @@ class FERNConfig:
             # discards >90% of it. 256 makes the window the thing you actually
             # pay for; pair it with --block 512 (measured: ~4x cheaper attention
             # than --block 1024 while ~3.5x more context per token).
+            # moe_capacity_factor=1.5 (the global default) measured 34% of expert
+            # assignments DROPPED on a trained eco router — dropped tokens get no
+            # expert edit at all, only the residual, so a third of the MoE's work
+            # was discarded every step. Root cause is router imbalance (busiest
+            # expert 21% vs 4.2% uniform), so raise the balancing pressure AND
+            # give capacity headroom: 4.0 -> ~4% dropped. Buffers are
+            # [E, capacity, D] and scale with batch*block, so lower the factor
+            # (or the batch) if VRAM gets tight.
             "eco":   dict(d_model=256, n_heads=4, experts_per_region=4,
                           expert_hidden_mult=2, max_seq_len=1024,
                           max_fractal_depth=4, reversible=True,
                           gen_mode="diffusion", diff_block_size=16,
-                          attn_local_window=256),
+                          attn_local_window=256,
+                          moe_capacity_factor=4.0, load_balance_weight=0.05),
             "small": dict(d_model=512, n_heads=8, experts_per_region=8,
                           expert_hidden_mult=4, max_seq_len=2048),
             "base":  dict(d_model=768, n_heads=12, experts_per_region=32,

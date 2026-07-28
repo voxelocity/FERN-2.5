@@ -50,7 +50,6 @@ def build_config(args) -> FERNConfig:
         reasoning_mode=args.reasoning_mode,
         offload_experts=args.offload,
         max_seq_len=max(256, args.block),
-        max_fractal_depth=args.depth,
         use_test_time_memory=not args.no_ttm,
         use_neuromodulator=not args.no_neuromod,
     )
@@ -65,6 +64,8 @@ def build_config(args) -> FERNConfig:
         overrides["diff_block_size"] = args.diff_block
     if args.attn_window is not None:
         overrides["attn_local_window"] = args.attn_window
+    if args.depth is not None:
+        overrides["max_fractal_depth"] = args.depth
     if args.capacity_factor is not None:
         overrides["moe_capacity_factor"] = args.capacity_factor
     if args.load_balance is not None:
@@ -96,8 +97,10 @@ def main():
                     help="block size for block diffusion (default: preset's)")
     ap.add_argument("--reasoning_mode", type=str, default="ponder",
                     choices=["equilibrium", "ponder"])
-    ap.add_argument("--depth", type=int, default=6,
-                    help="fractal reasoning steps; lower = much faster")
+    ap.add_argument("--depth", type=int, default=None,
+                    help="fractal reasoning steps; lower = much faster "
+                         "(default: preset's; eco=4). NOTE: changes depth_emb's "
+                         "shape, so pass the same value when resuming.")
     ap.add_argument("--no_ttm", action="store_true",
                     help="disable test-time-memory (forced off under diffusion)")
     ap.add_argument("--no_neuromod", action="store_true")

@@ -118,8 +118,12 @@ class FERNConfig:
     experts_per_region: int = 4
     moe_top_k: int = 2             # experts activated per token
     expert_hidden_mult: int = 2    # expert MLP hidden = mult * d_model
-    moe_capacity_factor: float = 1.5
-    load_balance_weight: float = 0.01
+    # 1.5 measured 34% of routed tokens DROPPED on a trained router (dropped
+    # tokens get no expert edit at all). 3.0 is a safer floor for any preset;
+    # eco/small raise it further. Buffers are [E, capacity, D] and scale with
+    # batch*block, so lower it if VRAM is tight.
+    moe_capacity_factor: float = 3.0
+    load_balance_weight: float = 0.05
     # Vectorized MoE runs experts in chunks of this many at a time. Bounds the
     # transient weight-stack copy (≈10 GB at `large` if unchunked) without
     # changing the result. 64 keeps `small` (48 experts) a single pass while
@@ -127,7 +131,11 @@ class FERNConfig:
     moe_stack_chunk: int = 64
 
     # ---- (1) Sparse attention -------------------------------------------
-    attn_local_window: int = 64    # each token sees this many local neighbours
+    # THE real context bound: the mask gives each token its own block plus this
+    # many tokens back, so a large --block with a small window computes a huge
+    # dense score matrix and discards most of it. 64 left each token seeing only
+    # ~73 keys regardless of --block.
+    attn_local_window: int = 256   # each token sees this many local neighbours
     attn_n_global: int = 8         # event-selected global tokens
 
     # ---- (7) Event-driven attention -------------------------------------
@@ -281,8 +289,18 @@ class FERNConfig:
                           # return zeros because nothing populates them.
                           use_test_time_memory=False, use_knowledge=False,
                           use_hier_memory=False),
+            # small: eco's bigger sibling — ~115M total / ~19M active. Carries
+            # the SAME fixes as eco (they were architecture-wide bugs, not
+            # eco-specific): real attention window, MoE capacity that doesn't
+            # silently drop a third of routed tokens, and no inert subsystems.
             "small": dict(d_model=512, n_heads=8, experts_per_region=8,
-                          expert_hidden_mult=4, max_seq_len=2048),
+                          expert_hidden_mult=4, max_seq_len=2048,
+                          max_fractal_depth=4, reversible=True,
+                          gen_mode="diffusion", diff_block_size=16,
+                          attn_local_window=256,
+                          moe_capacity_factor=4.0, load_balance_weight=0.05,
+                          use_test_time_memory=False, use_knowledge=False,
+                          use_hier_memory=False),
             "base":  dict(d_model=768, n_heads=12, experts_per_region=32,
                           expert_hidden_mult=4, max_seq_len=2048),
             "large": dict(d_model=1024, n_heads=16, experts_per_region=48,
